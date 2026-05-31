@@ -1,0 +1,43 @@
+{
+  "name": "@absolutejs/compliance",
+  "version": "0.1.0",
+  "description": "Framework-agnostic compliance substrate for the AbsoluteJS PaaS. Declarative data classification + residency + retention policies; orchestrators for retention sweeps, Subject Access Requests, right-to-erasure, and evidence bundles. Composes onto @absolutejs/audit + @absolutejs/telemetry without vendoring any specific framework (SOC2 / HIPAA / ISO 27001 / GDPR).",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/absolutejs/compliance.git"
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "type": "module",
+  "license": "BSL-1.1",
+  "author": "Alex Kahn",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "rm -rf dist && bun build src/index.ts --outdir dist --sourcemap --target=bun && tsc --project tsconfig.build.json",
+    "test": "bun test tests/",
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --write \"./**/*.{ts,json,md}\"",
+    "check:package": "bun run typecheck && bun run build && bun run test",
+    "release": "bun run format && bun run check:package && bun publish"
+  },
+  "keywords": ["absolutejs", "compliance", "gdpr", "soc2", "hipaa", "data-residency", "retention", "sar", "erasure", "audit"],
+  "peerDependencies": {
+    "bun-types": "^1.3.14"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.14",
+    "prettier": "^3.8.3",
+    "typescript": "^5.9.0"
+  }
+}
