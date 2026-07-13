@@ -21,21 +21,41 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
-    }
+    },
+    "./manifest": {
+      "types": "./dist/manifest.d.ts",
+      "import": "./dist/manifest.js",
+      "default": "./dist/manifest.js"
+    },
+    "./manifest.json": "./dist/manifest.json"
   },
   "publishConfig": {
     "access": "public"
   },
-  "files": ["dist", "README.md"],
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
-    "build": "rm -rf dist && bun build src/index.ts --outdir dist --sourcemap --target=bun && tsc --project tsconfig.build.json",
+    "build": "rm -rf dist && bun build src/index.ts src/manifest.ts --outdir dist --root ./src --sourcemap --target=bun && tsc --project tsconfig.build.json && absolute-manifest emit",
     "test": "bun test tests/",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write \"./**/*.{ts,json,md}\"",
     "check:package": "bun run typecheck && bun run build && bun run test",
     "release": "bun run format && bun run check:package && bun publish"
   },
-  "keywords": ["absolutejs", "compliance", "gdpr", "soc2", "hipaa", "data-residency", "retention", "sar", "erasure", "audit"],
+  "keywords": [
+    "absolutejs",
+    "compliance",
+    "gdpr",
+    "soc2",
+    "hipaa",
+    "data-residency",
+    "retention",
+    "sar",
+    "erasure",
+    "audit"
+  ],
   "peerDependencies": {
     "bun-types": "^1.3.14"
   },
@@ -43,5 +63,12 @@
     "@types/bun": "^1.3.14",
     "prettier": "^3.8.3",
     "typescript": "^5.9.0"
+  },
+  "absolutejs": {
+    "manifestContract": 1
+  },
+  "dependencies": {
+    "@absolutejs/manifest": "^0.1.0",
+    "@sinclair/typebox": "^0.34.0"
   }
 }
