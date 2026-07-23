@@ -1,6 +1,6 @@
 {
   "name": "@absolutejs/compliance",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Framework-agnostic compliance substrate for the AbsoluteJS PaaS. Declarative data classification + residency + retention policies; orchestrators for retention sweeps, Subject Access Requests, right-to-erasure, and evidence bundles. Composes onto @absolutejs/audit + @absolutejs/telemetry without vendoring any specific framework (SOC2 / HIPAA / ISO 27001 / GDPR).",
   "repository": {
     "type": "git",
@@ -65,10 +65,10 @@
     "typescript": "^5.9.0"
   },
   "absolutejs": {
-    "manifestContract": 1
+    "manifestContract": 2
   },
   "dependencies": {
-    "@absolutejs/manifest": "^0.1.0",
+    "@absolutejs/manifest": "^0.4.0",
     "@sinclair/typebox": "^0.34.0"
   }
 }

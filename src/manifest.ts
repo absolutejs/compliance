@@ -29,7 +29,7 @@ const AUDIT_RETENTION_DAYS = 2555;
  * Collectors, erasers, scanners, deleters, and audit brokers are
  * function-valued → wiring concerns. */
 export const manifest = defineManifest<CompliancePolicy, ComplianceRuntime>()({
-	contract: 1,
+	contract: 2,
 	identity: {
 		accent: '#0d9488',
 		category: 'compliance',
@@ -116,6 +116,12 @@ export const manifest = defineManifest<CompliancePolicy, ComplianceRuntime>()({
 	tools: {
 		check_residency: tool.runtime({
 			annotations: { readOnlyHint: true },
+			authorization: {
+				approval: 'never',
+				audience: 'admin',
+				effects: ['read'],
+				requiredScopes: ['compliance:read']
+			},
 			description:
 				'Check whether storing data of a classification in a region would violate the residency policy. Pure policy check — touches no data.',
 			handler: ({ classification, region, tenant }, runtime) => {
@@ -135,6 +141,19 @@ export const manifest = defineManifest<CompliancePolicy, ComplianceRuntime>()({
 		}),
 		erase_subject: tool.runtime({
 			annotations: { destructiveHint: true, idempotentHint: true },
+			authorization: {
+				approval: 'always',
+				audience: 'admin',
+				effects: ['delete', 'write'],
+				idempotency: { mode: 'resource' },
+				requiredScopes: ['compliance:erase'],
+				resource: {
+					idField: 'subjectId',
+					tenantIdField: 'tenant',
+					type: 'data-subject'
+				},
+				reversible: false
+			},
 			description:
 				'Execute a right-to-erasure request: every registered eraser deletes the subject’s records (erasure-exempt classes are anonymized in place instead). THIS DELETES DATA — run erasure_dry_run first.',
 			handler: async ({ subjectId, tenant }, runtime) => {
@@ -160,6 +179,17 @@ export const manifest = defineManifest<CompliancePolicy, ComplianceRuntime>()({
 		}),
 		erasure_dry_run: tool.runtime({
 			annotations: { readOnlyHint: true },
+			authorization: {
+				approval: 'never',
+				audience: 'admin',
+				effects: ['read'],
+				requiredScopes: ['compliance:read'],
+				resource: {
+					idField: 'subjectId',
+					tenantIdField: 'tenant',
+					type: 'data-subject'
+				}
+			},
 			description:
 				'Preview a right-to-erasure request: which erasers would delete and which would anonymize (erasure-exempt classes) for this subject, without touching any data.',
 			handler: async ({ subjectId, tenant }, runtime) => {
@@ -193,6 +223,17 @@ export const manifest = defineManifest<CompliancePolicy, ComplianceRuntime>()({
 		}),
 		subject_access_preview: tool.runtime({
 			annotations: { readOnlyHint: true },
+			authorization: {
+				approval: 'never',
+				audience: 'admin',
+				effects: ['read'],
+				requiredScopes: ['compliance:read'],
+				resource: {
+					idField: 'subjectId',
+					tenantIdField: 'tenant',
+					type: 'data-subject'
+				}
+			},
 			description:
 				'Run a Subject Access Request across every registered collector and report how many records each holds for the subject. Returns counts, not the records themselves.',
 			handler: async ({ subjectId, tenant }, runtime) => {
