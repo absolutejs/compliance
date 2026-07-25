@@ -1,6 +1,6 @@
 {
   "name": "@absolutejs/compliance",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Framework-agnostic compliance substrate for the AbsoluteJS PaaS. Declarative data classification + residency + retention policies; orchestrators for retention sweeps, Subject Access Requests, right-to-erasure, and evidence bundles. Composes onto @absolutejs/audit + @absolutejs/telemetry without vendoring any specific framework (SOC2 / HIPAA / ISO 27001 / GDPR).",
   "repository": {
     "type": "git",
@@ -41,7 +41,8 @@
     "test": "bun test tests/",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write \"./**/*.{ts,json,md}\"",
-    "check:package": "bun run typecheck && bun run build && bun run test",
+    "verify-package": "absolute-manifest verify-package",
+    "check:package": "bun run typecheck && bun run verify-package && bun run build && bun run verify-package --artifacts && bun run test",
     "release": "bun run format && bun run check:package && bun publish"
   },
   "keywords": [
@@ -56,9 +57,6 @@
     "erasure",
     "audit"
   ],
-  "peerDependencies": {
-    "bun-types": "^1.3.14"
-  },
   "devDependencies": {
     "@types/bun": "^1.3.14",
     "prettier": "^3.8.3",
@@ -68,7 +66,7 @@
     "manifestContract": 2
   },
   "dependencies": {
-    "@absolutejs/manifest": "^0.4.0",
+    "@absolutejs/manifest": "^0.7.2",
     "@sinclair/typebox": "^0.34.0"
   }
 }
