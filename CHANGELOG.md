@@ -1,5 +1,10 @@
 # @absolutejs/compliance changelog
 
+## 0.7.0 — 2026-08-01
+
+- Require the unified Dispatch 0.7 messaging contract.
+- Include the BSL-1.1 license artifact explicitly in npm releases.
+
 ## 0.6.0 — 2026-08-01
 
 - Derive the consent transport type from Dispatch's extensible transport
