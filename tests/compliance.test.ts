@@ -21,10 +21,10 @@ import {
 
 describe('messaging consent', () => {
 	const scope = {
+		programId: 'acme-incident-alerts',
+		purpose: 'incident-alerts',
 		recipient: '+12025550100',
-		senderId: 'acme',
 		tenant: 'tenant-a',
-		topic: 'incident-alerts',
 		transport: 'sms' as const
 	};
 
@@ -80,7 +80,11 @@ describe('messaging consent', () => {
 			channel: 'sms' as const,
 			message: {
 				body: 'Alert',
-				consent: { senderId: scope.senderId, topic: scope.topic },
+				consent: {
+					deliveryTransports: ['sms'] as const,
+					programId: scope.programId,
+					purpose: scope.purpose
+				},
 				tenant: scope.tenant,
 				to: scope.recipient
 			}
@@ -98,10 +102,62 @@ describe('messaging consent', () => {
 				message: {
 					...context.message,
 					channel: 'rcs',
+					consent: {
+						...context.message.consent,
+						deliveryTransports: ['rcs'] as const
+					},
 					to: `rcs:${scope.recipient}`
 				}
 			})
 		).toEqual({ allowed: true });
+	});
+
+	test('requires consent for every possible fallback transport', async () => {
+		const ledger = createMessagingConsentLedger({
+			store: createMemoryMessagingConsentStore()
+		});
+		const policy = createMessagingConsentDispatchPolicy({ ledger });
+		await ledger.grant(
+			{ ...scope, transport: 'rcs' },
+			{ at: 100, source: 'signup-form' }
+		);
+		const message = {
+			body: 'Alert',
+			channel: 'rcs' as const,
+			consent: {
+				deliveryTransports: ['rcs', 'sms'] as const,
+				programId: scope.programId,
+				purpose: scope.purpose
+			},
+			tenant: scope.tenant,
+			to: scope.recipient
+		};
+		expect(
+			await policy.evaluate({ adapter: 'twilio', channel: 'sms', message })
+		).toMatchObject({ allowed: false, code: 'missing-consent' });
+		await ledger.grant(scope, { at: 101, source: 'signup-form' });
+		expect(
+			await policy.evaluate({ adapter: 'twilio', channel: 'sms', message })
+		).toEqual({ allowed: true });
+	});
+
+	test('exports recipient evidence and purges only historical records by default', async () => {
+		const store = createMemoryMessagingConsentStore();
+		const ledger = createMessagingConsentLedger({
+			id: (() => {
+				let next = 0;
+				return () => `retention-${++next}`;
+			})(),
+			store
+		});
+		await ledger.grant(scope, { at: 100, source: 'signup-form' });
+		await ledger.revoke(scope, { at: 200, source: 'twilio-stop' });
+		expect(await store.exportRecipient({ recipient: scope.recipient })).toHaveLength(2);
+		expect(await store.purge({ before: 300 })).toBe(1);
+		expect(await ledger.decision(scope)).toMatchObject({
+			allowed: false,
+			code: 'revoked'
+		});
 	});
 });
 

@@ -9,7 +9,7 @@ HIPAA, ISO 27001, and GDPR all map onto the same shape.
 ## Messaging consent
 
 The messaging consent ledger records immutable grant/revocation evidence at an
-exact tenant, sender, topic, transport, and recipient scope. Memory and
+exact tenant, program, purpose, transport, and recipient scope. Memory and
 Postgres stores are included. Its dispatch policy blocks messages before an
 adapter or provider call when evidence is missing or revoked.
 
@@ -20,9 +20,9 @@ const consent = createMessagingConsentLedger({ audit, store });
 await consent.grant(
   {
     recipient: "+12025550100",
-    senderId: "acme",
+    programId: "acme-incident-alerts",
+    purpose: "incident-alerts",
     tenant: "tenant-a",
-    topic: "incident-alerts",
     transport: "sms",
   },
   { at: Date.now(), reference: "signup-42", source: "signup-form" },

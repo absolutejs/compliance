@@ -8,10 +8,10 @@ import type { ComplianceAuditLike } from "./index";
 export type MessagingConsentTransport = "mms" | "rcs" | "sms" | "whatsapp";
 
 export type MessagingConsentScope = {
+  programId: string;
+  purpose: string;
   recipient: string;
-  senderId: string;
   tenant?: string;
-  topic: string;
   transport: MessagingConsentTransport;
 };
 
@@ -39,13 +39,25 @@ export type MessagingConsentStore = {
   latest: (
     scope: MessagingConsentScope,
   ) => Promise<MessagingConsentRecord | undefined>;
+  /** Exports consent evidence for a recipient access request. */
+  exportRecipient: (input: {
+    recipient: string;
+    tenant?: string;
+  }) => Promise<MessagingConsentRecord[]>;
+  /** Purges historical evidence while retaining the current decision per scope by default. */
+  purge: (input: {
+    before: number;
+    preserveCurrent?: boolean;
+    recipient?: string;
+    tenant?: string;
+  }) => Promise<number>;
 };
 
 const scopeKey = (scope: MessagingConsentScope) =>
   JSON.stringify([
     scope.tenant ?? null,
-    scope.senderId,
-    scope.topic,
+    scope.programId,
+    scope.purpose,
     scope.transport,
     scope.recipient,
   ]);
@@ -62,6 +74,16 @@ export const createMemoryMessagingConsentStore = (): MessagingConsentStore => {
       return true;
     },
     durability: "memory",
+    exportRecipient: async (input) =>
+      [...records.values()]
+        .flat()
+        .filter(
+          (record) =>
+            record.recipient === input.recipient &&
+            (input.tenant === undefined || record.tenant === input.tenant),
+        )
+        .sort((left, right) => right.evidence.at - left.evidence.at)
+        .map((record) => structuredClone(record)),
     history: async (scope) =>
       [...(records.get(scopeKey(scope)) ?? [])]
         .reverse()
@@ -70,6 +92,35 @@ export const createMemoryMessagingConsentStore = (): MessagingConsentStore => {
       const history = records.get(scopeKey(scope));
       const record = history?.at(-1);
       return record === undefined ? undefined : structuredClone(record);
+    },
+    purge: async (input) => {
+      let purged = 0;
+      for (const [key, history] of records) {
+        const scoped = history.filter(
+          (record) =>
+            (input.recipient === undefined ||
+              record.recipient === input.recipient) &&
+            (input.tenant === undefined || record.tenant === input.tenant),
+        );
+        if (scoped.length === 0) continue;
+        const currentId = history.at(-1)?.id;
+        const kept = history.filter((record) => {
+          const preserveCurrent =
+            input.preserveCurrent !== false && record.id === currentId;
+          const remove =
+            !preserveCurrent &&
+            record.evidence.at < input.before &&
+            scoped.some(({ id }) => id === record.id);
+          if (remove) {
+            ids.delete(record.id);
+            purged += 1;
+          }
+          return !remove;
+        });
+        if (kept.length === 0) records.delete(key);
+        else records.set(key, kept);
+      }
+      return purged;
     },
   };
 };
@@ -82,11 +133,11 @@ export type MessagingConsentPostgresClient = {
 };
 
 export const MESSAGING_CONSENT_POSTGRES_SCHEMA = `
-CREATE TABLE IF NOT EXISTS absolute_messaging_consent (
+CREATE TABLE IF NOT EXISTS absolute_messaging_consent_v2 (
   id text PRIMARY KEY,
   tenant text,
-  sender_id text NOT NULL,
-  topic text NOT NULL,
+  program_id text NOT NULL,
+  purpose text NOT NULL,
   transport text NOT NULL,
   recipient text NOT NULL,
   status text NOT NULL CHECK (status IN ('granted', 'revoked')),
@@ -94,20 +145,23 @@ CREATE TABLE IF NOT EXISTS absolute_messaging_consent (
   recorded_at_ms bigint NOT NULL
 );
 CREATE INDEX IF NOT EXISTS absolute_messaging_consent_scope_idx
-  ON absolute_messaging_consent
-  (tenant, sender_id, topic, transport, recipient, recorded_at_ms DESC, id DESC);
+  ON absolute_messaging_consent_v2
+  (tenant, program_id, purpose, transport, recipient, recorded_at_ms DESC, id DESC);
+CREATE INDEX IF NOT EXISTS absolute_messaging_consent_recipient_idx
+  ON absolute_messaging_consent_v2
+  (recipient, tenant, recorded_at_ms DESC, id DESC);
 `;
 
 const fromRow = (row: Record<string, unknown>): MessagingConsentRecord => ({
   evidence: row.evidence as MessagingConsentEvidence,
   id: String(row.id),
+  programId: String(row.program_id),
+  purpose: String(row.purpose),
   recipient: String(row.recipient),
-  senderId: String(row.sender_id),
   status: row.status as MessagingConsentRecord["status"],
   ...(row.tenant === null || row.tenant === undefined
     ? {}
     : { tenant: String(row.tenant) }),
-  topic: String(row.topic),
   transport: row.transport as MessagingConsentTransport,
 });
 
@@ -115,31 +169,31 @@ export const createPostgresMessagingConsentStore = (
   client: MessagingConsentPostgresClient,
 ): MessagingConsentStore => {
   const select = `
-    SELECT id, tenant, sender_id, topic, transport, recipient, status, evidence
-    FROM absolute_messaging_consent
-    WHERE tenant IS NOT DISTINCT FROM $1 AND sender_id = $2 AND topic = $3
+    SELECT id, tenant, program_id, purpose, transport, recipient, status, evidence
+    FROM absolute_messaging_consent_v2
+    WHERE tenant IS NOT DISTINCT FROM $1 AND program_id = $2 AND purpose = $3
       AND transport = $4 AND recipient = $5
     ORDER BY recorded_at_ms DESC, id DESC`;
   const values = (scope: MessagingConsentScope) => [
     scope.tenant ?? null,
-    scope.senderId,
-    scope.topic,
+    scope.programId,
+    scope.purpose,
     scope.transport,
     scope.recipient,
   ];
   return {
     append: async (record) => {
       const result = await client.query(
-        `INSERT INTO absolute_messaging_consent
-          (id, tenant, sender_id, topic, transport, recipient, status, evidence, recorded_at_ms)
+        `INSERT INTO absolute_messaging_consent_v2
+          (id, tenant, program_id, purpose, transport, recipient, status, evidence, recorded_at_ms)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9)
          ON CONFLICT (id) DO NOTHING
          RETURNING id`,
         [
           record.id,
           record.tenant ?? null,
-          record.senderId,
-          record.topic,
+          record.programId,
+          record.purpose,
           record.transport,
           record.recipient,
           record.status,
@@ -150,6 +204,16 @@ export const createPostgresMessagingConsentStore = (
       return result.rows.length === 1;
     },
     durability: "durable",
+    exportRecipient: async (input) => {
+      const result = await client.query(
+        `SELECT id, tenant, program_id, purpose, transport, recipient, status, evidence
+         FROM absolute_messaging_consent_v2
+         WHERE recipient = $1 AND ($2::text IS NULL OR tenant = $2)
+         ORDER BY recorded_at_ms DESC, id DESC`,
+        [input.recipient, input.tenant ?? null],
+      );
+      return result.rows.map(fromRow);
+    },
     history: async (scope) => {
       const result = await client.query(select, values(scope));
       return result.rows.map(fromRow);
@@ -157,6 +221,34 @@ export const createPostgresMessagingConsentStore = (
     latest: async (scope) => {
       const result = await client.query(`${select} LIMIT 1`, values(scope));
       return result.rows[0] === undefined ? undefined : fromRow(result.rows[0]);
+    },
+    purge: async (input) => {
+      const result = await client.query(
+        `WITH ranked AS (
+           SELECT id,
+             row_number() OVER (
+               PARTITION BY tenant, program_id, purpose, transport, recipient
+               ORDER BY recorded_at_ms DESC, id DESC
+             ) AS scope_rank
+           FROM absolute_messaging_consent_v2
+           WHERE ($2::text IS NULL OR recipient = $2)
+             AND ($3::text IS NULL OR tenant = $3)
+         ), deleted AS (
+           DELETE FROM absolute_messaging_consent_v2 AS consent
+           USING ranked
+           WHERE consent.id = ranked.id
+             AND consent.recorded_at_ms < $1
+             AND ($4::boolean = false OR ranked.scope_rank > 1)
+           RETURNING consent.id
+         ) SELECT id FROM deleted`,
+        [
+          input.before,
+          input.recipient ?? null,
+          input.tenant ?? null,
+          input.preserveCurrent !== false,
+        ],
+      );
+      return result.rows.length;
     },
   };
 };
@@ -200,13 +292,16 @@ export const createMessagingConsentLedger = (input: {
     }
     for (const [name, value] of Object.entries({
       recipient: scope.recipient,
-      senderId: scope.senderId,
+      programId: scope.programId,
+      purpose: scope.purpose,
       source: evidence.source,
-      topic: scope.topic,
     })) {
       if (value.trim().length === 0) {
         throw new TypeError(`compliance: consent ${name} must not be empty`);
       }
+    }
+    if (!(["mms", "rcs", "sms", "whatsapp"] as const).includes(scope.transport)) {
+      throw new TypeError("compliance: consent transport is unsupported");
     }
     const result: MessagingConsentRecord = {
       ...scope,
@@ -220,9 +315,9 @@ export const createMessagingConsentLedger = (input: {
       ...(scope.tenant === undefined ? {} : { actor: scope.tenant }),
       metadata: {
         reference: evidence.reference,
-        senderId: scope.senderId,
+        programId: scope.programId,
+        purpose: scope.purpose,
         source: evidence.source,
-        topic: scope.topic,
         transport: scope.transport,
       },
       target: scope.recipient,
@@ -255,29 +350,41 @@ export const createMessagingConsentDispatchPolicy = (input: {
       return {
         allowed: false,
         code: "missing-consent-scope",
-        reason: "messaging sends require consent.senderId and consent.topic",
+        reason: "messaging sends require a program, purpose, and every delivery transport",
       };
     }
-    const decision = await input.ledger.decision({
-      recipient:
-        message.channel === "rcs" && message.to.startsWith("rcs:")
-          ? message.to.slice(4)
-          : message.to,
-      senderId: message.consent.senderId,
-      ...(message.tenant === undefined ? {} : { tenant: message.tenant }),
-      topic: message.consent.topic,
-      transport: message.channel ?? "sms",
-    });
-    return decision.allowed
-      ? { allowed: true }
-      : {
+    const recipient =
+      message.channel === "rcs" && message.to.startsWith("rcs:")
+        ? message.to.slice(4)
+        : message.to;
+    const transports = [...new Set(message.consent.deliveryTransports)];
+    if (transports.length === 0) {
+      return {
+        allowed: false,
+        code: "missing-consent-route",
+        reason: "at least one delivery transport is required",
+      };
+    }
+    for (const transport of transports) {
+      const decision = await input.ledger.decision({
+        programId: message.consent.programId,
+        purpose: message.consent.purpose,
+        recipient,
+        ...(message.tenant === undefined ? {} : { tenant: message.tenant }),
+        transport,
+      });
+      if (!decision.allowed) {
+        return {
           allowed: false,
           code: decision.code,
           reason:
             decision.code === "revoked"
-              ? "recipient revoked consent for this sender and topic"
-              : "no consent evidence exists for this sender and topic",
+              ? `recipient revoked consent for ${transport} delivery in this program`
+              : `no consent evidence exists for ${transport} delivery in this program`,
         };
+      }
+    }
+    return { allowed: true };
   },
   name: "messaging-consent",
 });
