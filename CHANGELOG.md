@@ -1,5 +1,9 @@
 # @absolutejs/compliance changelog
 
+## 0.3.2 — 2026-08-01
+
+- Canonicalize required-RCS recipient addresses to E.164 for consent lookup.
+
 ## 0.3.1 — 2026-08-01
 
 - Make consent ingestion idempotent with stable upstream event keys.

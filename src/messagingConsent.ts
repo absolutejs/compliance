@@ -259,7 +259,10 @@ export const createMessagingConsentDispatchPolicy = (input: {
       };
     }
     const decision = await input.ledger.decision({
-      recipient: message.to,
+      recipient:
+        message.channel === "rcs" && message.to.startsWith("rcs:")
+          ? message.to.slice(4)
+          : message.to,
       senderId: message.consent.senderId,
       ...(message.tenant === undefined ? {} : { tenant: message.tenant }),
       topic: message.consent.topic,

@@ -88,6 +88,20 @@ describe('messaging consent', () => {
 		expect(await policy.evaluate(context)).toMatchObject({ allowed: false });
 		await ledger.grant(scope, { at: 100, source: 'signup-form' });
 		expect(await policy.evaluate(context)).toEqual({ allowed: true });
+		await ledger.grant(
+			{ ...scope, transport: 'rcs' },
+			{ at: 101, source: 'signup-form' }
+		);
+		expect(
+			await policy.evaluate({
+				...context,
+				message: {
+					...context.message,
+					channel: 'rcs',
+					to: `rcs:${scope.recipient}`
+				}
+			})
+		).toEqual({ allowed: true });
 	});
 });
 
