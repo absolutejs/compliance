@@ -1,5 +1,17 @@
 # @absolutejs/compliance changelog
 
+## 0.5.0 — 2026-08-01
+
+- Consume Dispatch's provider-neutral `MessagingMessage` contract.
+- Derive every consent transport from the primary and fallback routes instead
+  of trusting a caller-maintained transport list.
+- Move the policy boundary from the legacy SMS channel to messaging.
+
+## 0.4.0 — 2026-08-01
+
+- Scope consent by stable program, purpose, tenant, transport, and recipient.
+- Add bounded evidence export and purge contracts for memory and PostgreSQL.
+
 ## 0.3.2 — 2026-08-01
 
 - Canonicalize required-RCS recipient addresses to E.164 for consent lookup.

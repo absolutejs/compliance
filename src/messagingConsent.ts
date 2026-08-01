@@ -1,7 +1,7 @@
 import type {
   DispatchPolicy,
   DispatchPolicyDecision,
-  SmsMessage,
+  MessagingMessage,
 } from "@absolutejs/dispatch";
 import type { ComplianceAuditLike } from "./index";
 
@@ -300,7 +300,9 @@ export const createMessagingConsentLedger = (input: {
         throw new TypeError(`compliance: consent ${name} must not be empty`);
       }
     }
-    if (!(["mms", "rcs", "sms", "whatsapp"] as const).includes(scope.transport)) {
+    if (
+      !(["mms", "rcs", "sms", "whatsapp"] as const).includes(scope.transport)
+    ) {
       throw new TypeError("compliance: consent transport is unsupported");
     }
     const result: MessagingConsentRecord = {
@@ -310,18 +312,19 @@ export const createMessagingConsentLedger = (input: {
       status,
     };
     const inserted = await input.store.append(result);
-    if (inserted) await input.audit?.append({
-      kind: `compliance.messaging-consent.${status}`,
-      ...(scope.tenant === undefined ? {} : { actor: scope.tenant }),
-      metadata: {
-        reference: evidence.reference,
-        programId: scope.programId,
-        purpose: scope.purpose,
-        source: evidence.source,
-        transport: scope.transport,
-      },
-      target: scope.recipient,
-    });
+    if (inserted)
+      await input.audit?.append({
+        kind: `compliance.messaging-consent.${status}`,
+        ...(scope.tenant === undefined ? {} : { actor: scope.tenant }),
+        metadata: {
+          reference: evidence.reference,
+          programId: scope.programId,
+          purpose: scope.purpose,
+          source: evidence.source,
+          transport: scope.transport,
+        },
+        target: scope.recipient,
+      });
     return result;
   };
   return {
@@ -344,27 +347,22 @@ export const createMessagingConsentDispatchPolicy = (input: {
   ledger: MessagingConsentLedger;
 }): DispatchPolicy => ({
   evaluate: async (context): Promise<DispatchPolicyDecision> => {
-    if (context.channel !== "sms") return { allowed: true };
-    const message = context.message as SmsMessage;
+    if (context.channel !== "messaging") return { allowed: true };
+    const message = context.message as MessagingMessage;
     if (message.consent === undefined) {
       return {
         allowed: false,
         code: "missing-consent-scope",
-        reason: "messaging sends require a program, purpose, and every delivery transport",
+        reason: "messaging sends require a stable program and purpose",
       };
     }
-    const recipient =
-      message.channel === "rcs" && message.to.startsWith("rcs:")
-        ? message.to.slice(4)
-        : message.to;
-    const transports = [...new Set(message.consent.deliveryTransports)];
-    if (transports.length === 0) {
-      return {
-        allowed: false,
-        code: "missing-consent-route",
-        reason: "at least one delivery transport is required",
-      };
-    }
+    const recipient = message.to.address;
+    const transports = [
+      ...new Set([
+        message.to.transport,
+        ...(message.fallbacks ?? []).map(({ transport }) => transport),
+      ]),
+    ];
     for (const transport of transports) {
       const decision = await input.ledger.decision({
         programId: message.consent.programId,

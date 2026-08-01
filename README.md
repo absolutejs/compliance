@@ -49,17 +49,17 @@ retention window, optional residency region, optional
 ```ts
 const policy = createCompliancePolicy({
   classifications: {
-    pii:       { id: 'pii', retentionMs: 730 * DAY, residency: 'eu' },
-    'audit-log': {
-      id: 'audit-log',
+    pii: { id: "pii", retentionMs: 730 * DAY, residency: "eu" },
+    "audit-log": {
+      id: "audit-log",
       retentionMs: Infinity,
-      erasureExempt: true,  // SOX / many regulators require 7+ years
+      erasureExempt: true, // SOX / many regulators require 7+ years
       flags: { immutable: true },
     },
-    operational: { id: 'operational', retentionMs: 90 * DAY },
+    operational: { id: "operational", retentionMs: 90 * DAY },
   },
   tenantOverrides: {
-    'gdpr-strict-tenant': { pii: { retentionMs: 90 * DAY } },
+    "gdpr-strict-tenant": { pii: { retentionMs: 90 * DAY } },
   },
 });
 ```
@@ -71,11 +71,15 @@ Pure check. The runtime, sync, queue, and blob layers call
 data move. Mismatches throw `ResidencyViolation`.
 
 ```ts
-guard.check({ classification: 'pii', region: 'us-east' });
+guard.check({ classification: "pii", region: "us-east" });
 // throws ResidencyViolation if policy says 'eu'
 
 // non-throwing variant
-const v = guard.inspect({ classification: 'pii', region: 'eu', tenant: 'acme' });
+const v = guard.inspect({
+  classification: "pii",
+  region: "eu",
+  tenant: "acme",
+});
 if (v !== null) return new Response(v.message, { status: 451 });
 ```
 
@@ -92,12 +96,12 @@ const report = await runRetention({
   policy,
   audit: broker,
   scanners: [
-    { classification: 'audit-log', scan: auditTable.scan },
-    { classification: 'pii',       scan: userTable.scan  },
+    { classification: "audit-log", scan: auditTable.scan },
+    { classification: "pii", scan: userTable.scan },
   ],
   deleters: {
-    'audit-log': (rows) => auditTable.delete(rows.map(r => r.id)),
-    'pii':       (rows) => userTable.delete(rows.map(r => r.id)),
+    "audit-log": (rows) => auditTable.delete(rows.map((r) => r.id)),
+    pii: (rows) => userTable.delete(rows.map((r) => r.id)),
   },
 });
 // report = { byClassification: { pii: { scanned, deleted, durationMs }, ... }, errors }
@@ -116,20 +120,41 @@ erasure to audit if a broker is provided.
 
 ```ts
 const bundle = await runSubjectAccess({
-  subject: { tenant: 'acme', subjectId: 'u-1' },
+  subject: { tenant: "acme", subjectId: "u-1" },
   collectors: [
-    { name: 'profile',    classification: 'pii',         collect: userTable.findBySubject },
-    { name: 'audit',      classification: 'audit-log',   collect: auditTable.findBySubject },
-    { name: 'sync-packs', classification: 'sync-packs',  collect: syncPacks.findBySubject },
+    {
+      name: "profile",
+      classification: "pii",
+      collect: userTable.findBySubject,
+    },
+    {
+      name: "audit",
+      classification: "audit-log",
+      collect: auditTable.findBySubject,
+    },
+    {
+      name: "sync-packs",
+      classification: "sync-packs",
+      collect: syncPacks.findBySubject,
+    },
   ],
 });
 
 await runErasure({
-  policy, audit: broker,
-  subject: { tenant: 'acme', subjectId: 'u-1' },
+  policy,
+  audit: broker,
+  subject: { tenant: "acme", subjectId: "u-1" },
   erasers: [
-    { name: 'profile', classification: 'pii',       erase: userTable.deleteBySubject },
-    { name: 'audit',   classification: 'audit-log', anonymize: auditTable.anonymizeSubject },
+    {
+      name: "profile",
+      classification: "pii",
+      erase: userTable.deleteBySubject,
+    },
+    {
+      name: "audit",
+      classification: "audit-log",
+      anonymize: auditTable.anonymizeSubject,
+    },
   ],
 });
 ```
@@ -147,9 +172,9 @@ const bundle = await collectEvidence({
   policy,
   period: { start: lastQuarter, end: now },
   sources: [
-    auditEvidenceSource(broker, { kindPrefix: 'compliance.' }),
-    { name: 'access-log',     collect: () => accessLog.dump(period) },
-    { name: 'config-snapshot',collect: () => config.snapshot() },
+    auditEvidenceSource(broker, { kindPrefix: "compliance." }),
+    { name: "access-log", collect: () => accessLog.dump(period) },
+    { name: "config-snapshot", collect: () => config.snapshot() },
   ],
 });
 // Write `bundle` to disk → hand to your SOC2 / ISO / HIPAA auditor.
