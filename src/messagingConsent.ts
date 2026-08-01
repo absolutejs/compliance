@@ -18,6 +18,8 @@ export type MessagingConsentScope = {
 export type MessagingConsentEvidence = {
   /** When and how the recipient granted or revoked consent. */
   at: number;
+  /** Stable upstream event id used to make webhook retries idempotent. */
+  idempotencyKey?: string;
   metadata?: Record<string, unknown>;
   reference?: string;
   source: string;
@@ -31,7 +33,8 @@ export type MessagingConsentRecord = MessagingConsentScope & {
 
 export type MessagingConsentStore = {
   readonly durability: "durable" | "memory";
-  append: (record: MessagingConsentRecord) => Promise<void>;
+  /** Returns false when this record id was already stored. */
+  append: (record: MessagingConsentRecord) => Promise<boolean>;
   history: (scope: MessagingConsentScope) => Promise<MessagingConsentRecord[]>;
   latest: (
     scope: MessagingConsentScope,
@@ -49,16 +52,20 @@ const scopeKey = (scope: MessagingConsentScope) =>
 
 export const createMemoryMessagingConsentStore = (): MessagingConsentStore => {
   const records = new Map<string, MessagingConsentRecord[]>();
+  const ids = new Set<string>();
   return {
     append: async (record) => {
+      if (ids.has(record.id)) return false;
       const key = scopeKey(record);
       records.set(key, [...(records.get(key) ?? []), structuredClone(record)]);
+      ids.add(record.id);
+      return true;
     },
     durability: "memory",
     history: async (scope) =>
-      (records.get(scopeKey(scope)) ?? []).map((record) =>
-        structuredClone(record),
-      ),
+      [...(records.get(scopeKey(scope)) ?? [])]
+        .reverse()
+        .map((record) => structuredClone(record)),
     latest: async (scope) => {
       const history = records.get(scopeKey(scope));
       const record = history?.at(-1);
@@ -122,10 +129,12 @@ export const createPostgresMessagingConsentStore = (
   ];
   return {
     append: async (record) => {
-      await client.query(
+      const result = await client.query(
         `INSERT INTO absolute_messaging_consent
           (id, tenant, sender_id, topic, transport, recipient, status, evidence, recorded_at_ms)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9)`,
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9)
+         ON CONFLICT (id) DO NOTHING
+         RETURNING id`,
         [
           record.id,
           record.tenant ?? null,
@@ -138,6 +147,7 @@ export const createPostgresMessagingConsentStore = (
           record.evidence.at,
         ],
       );
+      return result.rows.length === 1;
     },
     durability: "durable",
     history: async (scope) => {
@@ -201,11 +211,11 @@ export const createMessagingConsentLedger = (input: {
     const result: MessagingConsentRecord = {
       ...scope,
       evidence: structuredClone(evidence),
-      id: input.id?.() ?? crypto.randomUUID(),
+      id: evidence.idempotencyKey ?? input.id?.() ?? crypto.randomUUID(),
       status,
     };
-    await input.store.append(result);
-    await input.audit?.append({
+    const inserted = await input.store.append(result);
+    if (inserted) await input.audit?.append({
       kind: `compliance.messaging-consent.${status}`,
       ...(scope.tenant === undefined ? {} : { actor: scope.tenant }),
       metadata: {

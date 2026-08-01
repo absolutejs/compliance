@@ -28,7 +28,7 @@ describe('messaging consent', () => {
 		transport: 'sms' as const
 	};
 
-	test('records grant and revocation evidence chronologically', async () => {
+	test('records grant and revocation evidence newest-first', async () => {
 		const ledger = createMessagingConsentLedger({
 			id: (() => {
 				let next = 0;
@@ -47,7 +47,27 @@ describe('messaging consent', () => {
 			allowed: false,
 			code: 'revoked'
 		});
-		expect(await ledger.history(scope)).toHaveLength(2);
+		expect((await ledger.history(scope)).map(({ id }) => id)).toEqual([
+			'consent-2',
+			'consent-1'
+		]);
+	});
+
+	test('deduplicates retried upstream consent events', async () => {
+		const events: unknown[] = [];
+		const ledger = createMessagingConsentLedger({
+			audit: { append: async (event) => void events.push(event) },
+			store: createMemoryMessagingConsentStore()
+		});
+		const evidence = {
+			at: 100,
+			idempotencyKey: 'twilio:SM123:STOP',
+			source: 'twilio-advanced-opt-out'
+		};
+		await ledger.revoke(scope, evidence);
+		await ledger.revoke(scope, evidence);
+		expect(await ledger.history(scope)).toHaveLength(1);
+		expect(events).toHaveLength(1);
 	});
 
 	test('supplies a dispatch policy that enforces the exact scope', async () => {

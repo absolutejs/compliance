@@ -1,5 +1,10 @@
 # @absolutejs/compliance changelog
 
+## 0.3.1 — 2026-08-01
+
+- Make consent ingestion idempotent with stable upstream event keys.
+- Return consent history newest-first across memory and PostgreSQL stores.
+
 ## 0.3.0 — 2026-08-01
 
 - Add an immutable, provider-neutral messaging consent evidence ledger.
