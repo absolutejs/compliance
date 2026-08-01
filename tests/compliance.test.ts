@@ -3,6 +3,9 @@ import {
 	auditEvidenceSource,
 	collectEvidence,
 	createCompliancePolicy,
+	createMemoryMessagingConsentStore,
+	createMessagingConsentDispatchPolicy,
+	createMessagingConsentLedger,
 	createResidencyGuard,
 	ResidencyViolation,
 	resolveClassification,
@@ -15,6 +18,58 @@ import {
 	type SubjectAccessCollector,
 	type SubjectEraser
 } from '../src/index';
+
+describe('messaging consent', () => {
+	const scope = {
+		recipient: '+12025550100',
+		senderId: 'acme',
+		tenant: 'tenant-a',
+		topic: 'incident-alerts',
+		transport: 'sms' as const
+	};
+
+	test('records grant and revocation evidence chronologically', async () => {
+		const ledger = createMessagingConsentLedger({
+			id: (() => {
+				let next = 0;
+				return () => `consent-${++next}`;
+			})(),
+			store: createMemoryMessagingConsentStore()
+		});
+		expect(await ledger.decision(scope)).toEqual({
+			allowed: false,
+			code: 'missing-consent'
+		});
+		await ledger.grant(scope, { at: 100, source: 'signup-form' });
+		expect((await ledger.decision(scope)).allowed).toBe(true);
+		await ledger.revoke(scope, { at: 200, source: 'twilio-stop' });
+		expect(await ledger.decision(scope)).toMatchObject({
+			allowed: false,
+			code: 'revoked'
+		});
+		expect(await ledger.history(scope)).toHaveLength(2);
+	});
+
+	test('supplies a dispatch policy that enforces the exact scope', async () => {
+		const ledger = createMessagingConsentLedger({
+			store: createMemoryMessagingConsentStore()
+		});
+		const policy = createMessagingConsentDispatchPolicy({ ledger });
+		const context = {
+			adapter: 'twilio',
+			channel: 'sms' as const,
+			message: {
+				body: 'Alert',
+				consent: { senderId: scope.senderId, topic: scope.topic },
+				tenant: scope.tenant,
+				to: scope.recipient
+			}
+		};
+		expect(await policy.evaluate(context)).toMatchObject({ allowed: false });
+		await ledger.grant(scope, { at: 100, source: 'signup-form' });
+		expect(await policy.evaluate(context)).toEqual({ allowed: true });
+	});
+});
 
 // =============================================================================
 // Audit mock

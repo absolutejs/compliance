@@ -1,6 +1,6 @@
 {
   "name": "@absolutejs/compliance",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Framework-agnostic compliance substrate for the AbsoluteJS PaaS. Declarative data classification + residency + retention policies; orchestrators for retention sweeps, Subject Access Requests, right-to-erasure, and evidence bundles. Composes onto @absolutejs/audit + @absolutejs/telemetry without vendoring any specific framework (SOC2 / HIPAA / ISO 27001 / GDPR).",
   "repository": {
     "type": "git",
@@ -37,7 +37,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "rm -rf dist && bun build src/index.ts src/manifest.ts --outdir dist --root ./src --sourcemap --target=bun && tsc --project tsconfig.build.json && absolute-manifest emit",
+    "build": "rm -rf dist && bun build src/index.ts src/manifest.ts --outdir dist --root ./src --sourcemap --target=bun --external @absolutejs/dispatch && tsc --project tsconfig.build.json && absolute-manifest emit",
     "test": "bun test tests/",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write \"./**/*.{ts,json,md}\"",
@@ -58,12 +58,32 @@
     "audit"
   ],
   "devDependencies": {
+    "@absolutejs/dispatch": "0.3.0",
     "@types/bun": "^1.3.14",
     "prettier": "^3.8.3",
     "typescript": "^5.9.0"
   },
+  "peerDependencies": {
+    "@absolutejs/dispatch": ">=0.3.0 <0.4"
+  },
+  "peerDependenciesMeta": {
+    "@absolutejs/dispatch": {
+      "optional": true
+    }
+  },
   "absolutejs": {
-    "manifestContract": 2
+    "manifestContract": 2,
+    "runtimePeers": {
+      "@absolutejs/dispatch": {
+        "artifactImports": [],
+        "buildExternals": [
+          "@absolutejs/dispatch"
+        ],
+        "optional": true,
+        "range": ">=0.3.0 <0.4",
+        "tested": "0.3.0"
+      }
+    }
   },
   "dependencies": {
     "@absolutejs/manifest": "^0.7.2",

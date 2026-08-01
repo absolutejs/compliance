@@ -1,5 +1,12 @@
 # @absolutejs/compliance changelog
 
+## 0.3.0 — 2026-08-01
+
+- Add an immutable, provider-neutral messaging consent evidence ledger.
+- Add memory and Postgres consent stores with an installable SQL schema.
+- Add a dispatch authorization policy that blocks missing or revoked consent.
+- Scope evidence by tenant, sender, topic, transport, and recipient.
+
 ## 0.1.0 — 2026-05-31
 
 Initial release. Closes G14 from the second-pass PaaS audit — the

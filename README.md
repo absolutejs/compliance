@@ -2,9 +2,41 @@
 
 > Framework-agnostic compliance substrate for the AbsoluteJS PaaS.
 
-`@absolutejs/compliance` gives a control plane five composable
+`@absolutejs/compliance` gives a control plane composable
 primitives. None of them know about a specific framework — SOC2,
 HIPAA, ISO 27001, and GDPR all map onto the same shape.
+
+## Messaging consent
+
+The messaging consent ledger records immutable grant/revocation evidence at an
+exact tenant, sender, topic, transport, and recipient scope. Memory and
+Postgres stores are included. Its dispatch policy blocks messages before an
+adapter or provider call when evidence is missing or revoked.
+
+```ts
+const store = createPostgresMessagingConsentStore(postgres);
+const consent = createMessagingConsentLedger({ audit, store });
+
+await consent.grant(
+  {
+    recipient: "+12025550100",
+    senderId: "acme",
+    tenant: "tenant-a",
+    topic: "incident-alerts",
+    transport: "sms",
+  },
+  { at: Date.now(), reference: "signup-42", source: "signup-form" },
+);
+
+const dispatcher = createDispatcher({
+  policies: [createMessagingConsentDispatchPolicy({ ledger: consent })],
+  sms,
+});
+```
+
+Apply `MESSAGING_CONSENT_POSTGRES_SCHEMA` once before using the Postgres
+store. Provider adapters can write signed opt-in/opt-out callbacks into the
+same ledger.
 
 ## Primitives
 
