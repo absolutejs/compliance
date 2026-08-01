@@ -1,5 +1,11 @@
 # @absolutejs/compliance changelog
 
+## 0.6.0 — 2026-08-01
+
+- Derive the consent transport type from Dispatch's extensible transport
+  registry so adapter-owned channels participate in the same evidence ledger
+  and policy without a Compliance release.
+
 ## 0.5.0 — 2026-08-01
 
 - Consume Dispatch's provider-neutral `MessagingMessage` contract.

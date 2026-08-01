@@ -2,10 +2,11 @@ import type {
   DispatchPolicy,
   DispatchPolicyDecision,
   MessagingMessage,
+  MessagingTransport,
 } from "@absolutejs/dispatch";
 import type { ComplianceAuditLike } from "./index";
 
-export type MessagingConsentTransport = "mms" | "rcs" | "sms" | "whatsapp";
+export type MessagingConsentTransport = MessagingTransport;
 
 export type MessagingConsentScope = {
   programId: string;
