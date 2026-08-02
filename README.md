@@ -1,6 +1,6 @@
 # `@absolutejs/compliance`
 
-> Framework-agnostic compliance substrate for the AbsoluteJS PaaS.
+> Framework-agnostic compliance policy used by the hosted AbsoluteJS.ai platform.
 
 `@absolutejs/compliance` gives a control plane composable
 primitives. None of them know about a specific framework — SOC2,
