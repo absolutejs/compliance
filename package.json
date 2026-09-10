@@ -47,7 +47,7 @@
     "verify-package": "absolute-manifest verify-package",
     "check:package": "bun run typecheck && bun run verify-package && bun run build && bun run test && absolute-changelog check",
     "release": "bun run format && bun run check:package && bun publish",
-    "prepublishOnly": "absolute-changelog check"
+    "prepublishOnly": "bun run check:package"
   },
   "keywords": [
     "absolutejs",
@@ -62,7 +62,7 @@
     "audit"
   ],
   "devDependencies": {
-    "@absolutejs/changelog": "^0.5.1",
+    "@absolutejs/changelog": "^0.6.0",
     "@absolutejs/dispatch": "0.7.0",
     "@types/bun": "^1.3.14",
     "prettier": "^3.8.3",
